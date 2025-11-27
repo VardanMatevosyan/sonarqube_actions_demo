@@ -1,0 +1,70 @@
+name: SonarQube
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  branch-name-policy:
+    name: branch-name-policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR source branch name
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH="${{ github.head_ref }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+          echo "PR head ref: $BRANCH"
+          if [[ "$BRANCH" =~ ^(release/|hotfix/|feature/|bugfix/|test|main).* ]]; then
+            echo "Allowed branch pattern: $BRANCH"
+            exit 0
+          else
+            echo "::error ::Branch name '$BRANCH' is not allowed to merge into main. Allowed patterns: release/*, hotfix/*, feature/*, bugfix/*, test*"
+            exit 1
+          fi
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    container:
+      image: eclipse-temurin:17-jdk
+    steps:
+      - name: Checkout source code to docker ubuntu container
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Build project
+        run: ./gradlew build -x test
+  sast:
+    needs:
+      - build
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code to docker ubuntu container
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_ORGANIZATION_KEY: ${{ secrets.SONAR_ORGANIZATION_KEY }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_PROJECT_NAME: ${{ secrets.SONAR_PROJECT_NAME }}
+        run: ./gradlew sonar --info
