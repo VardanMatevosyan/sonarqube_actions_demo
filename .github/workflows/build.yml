@@ -42,9 +42,30 @@ jobs:
           fetch-depth: 0
       - name: Build project
         run: ./gradlew build -x test
+  test_and_coverage:
+    name: Test and Coverage
+    runs-on: ubuntu-latest
+    container:
+      image: eclipse-temurin:17-jdk
+    steps:
+      - name: Checkout source code to docker ubuntu container
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Run tests with coverage
+        run: ./gradlew jacocoTestCoverageVerification
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage-report
+          path: 'build'
+          overwrite: true
+          retention-days: 5
   sast:
     needs:
       - build
+      - test_and_coverage
     name: SonarQube Scan
     runs-on: ubuntu-latest
     steps:
@@ -59,6 +80,16 @@ jobs:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
+      - name: Download JaCoCo report
+        uses: actions/download-artifact@v4
+        with:
+          name: test-coverage-report
+          path: .
+
+      - name: Verify report exists
+        run: |
+          ls -la ./reports/jacoco/test
 
       - name: SonarQube Scan
         env:
