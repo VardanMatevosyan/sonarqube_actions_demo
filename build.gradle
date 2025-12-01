@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'jacoco'
     id "org.sonarqube" version "7.0.0.6105"
     id 'org.springframework.boot' version '3.0.0'
     id 'io.spring.dependency-management' version '1.1.7'
@@ -59,15 +60,81 @@ if (localFile.exists()) {
 
 sonar {
     properties {
+        property "sonar.coverage.jacocoxml.import", "true"
+        property "sonar.java.coveragePlugin", "jacoco"
+        property "sonar.coverage.jacoco.xmlReportPaths",
+                System.getenv("SONAR_COVERAGE_JACOCO_XML_REPORT_PATH")
+                        ?: localProps["sonar.coverage.jacoco.xmlReportPaths"]
         property "sonar.projectKey", System.getenv("SONAR_PROJECT_KEY") ?: localProps["sonar.projectKey"]
         property "sonar.organization", System.getenv("SONAR_ORGANIZATION_KEY") ?: localProps["sonar.organization"]
         property "sonar.projectName", System.getenv("SONAR_PROJECT_NAME") ?: localProps["sonar.projectName"]
         property "sonar.token", System.getenv("SONAR_TOKEN") ?: localProps["sonar.token"]
         property "sonar.host.url", System.getenv("SONAR_HOST_URL") ?: localProps["sonar.host.url"]
+        property "sonar.coverage.exclusions", "**/config/**,**/mapper/**,**/model/**,**/exception/**"
     }
 }
 
 
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: ['**/config/**', '**/model/**', '**/exception/**', '**/mapper/**'])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            enabled = true
+            element = 'BUNDLE'
+
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.65
+            }
+
+            limit {
+                counter = 'METHOD'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+
+            limit {
+                counter = 'CLASS'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+        }
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: ['**/config/**', '**/model/**', '**/exception/**', '**/mapper/**'])
+        }))
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
 }
