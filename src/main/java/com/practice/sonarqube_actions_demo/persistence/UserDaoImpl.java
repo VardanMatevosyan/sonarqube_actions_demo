@@ -19,11 +19,12 @@ public class UserDaoImpl implements UserDao {
     final DataSource dataSource;
 
     public Optional<User> getUserById(Integer id) {
-        String query = "SELECT id, username, email FROM users WHERE id = " + id;
+        String query = "SELECT id, username, email FROM users WHERE id = ?";
         try (
                 Connection connection = dataSource.getConnection();
-                Statement ps = connection.createStatement()) {
-            var rs = ps.executeQuery(query);
+                PreparedStatement ps = connection.prepareStatement(query)) {
+            ps.setInt(1, id);
+            var rs = ps.executeQuery();
             if (rs.next()) {
                 User user = buildUserEntity(rs);
                 return Optional.of(user);
